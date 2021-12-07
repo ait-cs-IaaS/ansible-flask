@@ -9,11 +9,11 @@
     prompt: "Please enter the github access token"
     echo: yes
   register: access_token
-  when: not FLASK_ACCESS_TOKEN
+  when: not GIT_ACCESS_TOKEN
 
 - name: "[{{ flask_app_name | upper }}] Register Access Token"
   set_fact:
-    FLASK_ACCESS_TOKEN: "{{ access_token.user_input  }}"
+    GIT_ACCESS_TOKEN: "{{ access_token.user_input  }}"
   when: access_token.user_input is defined
 
 # -------------------------------------------
@@ -21,10 +21,14 @@
 # -------------------------------------------
 
 - name: "[{{ flask_app_name | upper }}] Adding {{ flask_user }} user"
-  ansible.builtin.user:
-    name: "{{ flask_user }}"
-    group: "{{ flask_usergroup }}"
-  become: yes
+  ansible.builtin.include_role:
+    name: grog.user
+    apply:
+      become: yes
+  vars:
+    user_list:
+    - name: "{{ flask_user }}"
+      groups: ["{{ flask_usergroup }}"]
 
 # -------------------------------------------
 # *** Install packages ***
