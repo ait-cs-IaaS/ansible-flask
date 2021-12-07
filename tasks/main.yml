@@ -1,0 +1,196 @@
+---
+
+# -------------------------------------------
+# *** Prerequisites ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Set github access token"
+  pause:
+    prompt: "Please enter the github access token"
+    echo: yes
+  register: access_token
+  when: not FLASK_ACCESS_TOKEN
+
+- name: "[{{ flask_app_name | upper }}] Register Access Token"
+  set_fact:
+    FLASK_ACCESS_TOKEN: "{{ access_token.user_input  }}"
+  when: access_token.user_input is defined
+
+# -------------------------------------------
+# *** Add users ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Adding {{ flask_user }} user"
+  ansible.builtin.user:
+    name: "{{ flask_user }}"
+    group: "{{ flask_usergroup }}"
+  become: yes
+
+# -------------------------------------------
+# *** Install packages ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Ensure <{{ flask_base_packages | join(', ') }}> is installed"
+  ansible.builtin.package:
+    name: "{{ flask_base_packages }}"
+    state: latest
+    update_cache: yes
+  become: yes
+
+# -------------------------------------------
+# *** Folder structure ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Cleanup {{ flask_app_name }}'s base directory for reinstall"
+  ansible.builtin.file:
+    path: "{{ flask_paths.base }}"
+    state: absent
+  become: yes
+  when: flask_git.always_reinstall | default('yes')
+
+- name: "[{{ flask_app_name | upper }}] Ensure {{ flask_app_name }}'s paths exist"
+  ansible.builtin.file:
+    path: "{{ item.value }}"
+    owner: "{{ flask_user }}"
+    group: "{{ flask_usergroup }}"
+    state: directory
+  become: yes
+  loop: "{{ flask_paths | dict2items }}"
+
+- name: "[{{ flask_app_name | upper }}] Check if {{ flask_app_name }}'s base directory is empty"
+  block:
+    - ansible.builtin.stat:
+        path: "{{ flask_paths.base }}"
+      register: stats
+    - ansible.builtin.find:
+        path: "{{ flask_paths.base }}"
+        file_type: directory
+      register: files
+      when: stats.stat.exists == true
+    - name: INFORMATION
+      debug:
+        msg: "{{ flask_paths.base }} is not empty, cloning of <{{ flask_app_name }}> will be skipped.\
+        In order to force it, set 'flask_git.always_reinstall' to 'yes'."
+      when: files.examined | int > 0
+  when: not flask_git.always_reinstall | default('yes')
+
+# -------------------------------------------
+# *** Get Flask App ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Clone {{ flask_app_name }} repo"
+  ansible.builtin.git:
+    repo: "https://\
+      {{ flask_git.token }}@github.com/\
+      {{ flask_git.user }}/\
+      {{ flask_git.repo }}.git"
+    dest: "{{ flask_paths.base }}"
+    version: "{{ flask_git.branch }}"
+    force: "{{ flask_git.force }}"
+    single_branch: yes
+  become: yes
+  become_user: "{{ flask_user }}"
+  when: flask_git.always_reinstall | default('yes') or 
+        files.examined | int == 0
+
+
+# -------------------------------------------
+# *** Setup Flask App ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Setup virtualenv"
+  ansible.builtin.pip:
+    requirements: "{{ flask_paths.base }}/requirements.txt"
+    virtualenv: "{{ flask_paths.base }}/venv"
+    virtualenv_command: 'python3 -m venv'
+  become: yes
+  become_user: "{{ flask_user }}"
+
+# -------------------------------------------
+# *** App Config ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Add {{ flask_app_name }} config"
+  ansible.builtin.template:
+    src: "{{ flask_config.src }}"
+    dest: "{{ flask_config.dest }}"
+    owner: "{{ flask_user }}"
+    group: "{{ flask_user }}"
+    mode: '0644'
+  when: flask_config is defined
+  become: yes
+  become_user: "{{ flask_user }}"
+
+# -------------------------------------------
+# *** NGINX Config ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Ensure <{{ flask_nginx_packages | join(', ') }}> is installed"
+  ansible.builtin.package:
+    name: "{{ flask_nginx_packages }}"
+    state: latest
+    update_cache: yes
+  when: flask_nginx is defined
+  become: yes
+
+- name: "[{{ flask_app_name | upper }}] Remove default config"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: 
+    - "/etc/nginx/sites-enabled/default"
+    - "/etc/nginx/conf.d"
+  when: flask_nginx is defined
+  become: yes
+  notify: restart nginx
+
+- name: "[{{ flask_app_name | upper }}] Add {{ flask_app_name }}'s NGINX configuration file"
+  ansible.builtin.template:
+    src: "{{ flask_nginx.src }}"
+    dest: "{{ flask_nginx.dest }}"
+    owner: "{{ flask_user }}"
+    group: "{{ flask_user }}"
+    mode: 0644
+  when: flask_nginx is defined
+  become: yes
+  notify: restart nginx
+
+# -------------------------------------------
+# *** HTPASSWD Config ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Ensure htpasswd credentials are configured"
+  community.general.htpasswd:
+    path: "/etc/nginx/htpasswd"
+    name: "{{ item.key }}"
+    password: "{{ item.value }}"
+    owner: "root"
+    group: "www-data"
+    crypt_scheme: plaintext # must be encrypted prior
+    mode: "0640"
+  loop: "{{ flask_userlist | dict2items }}"
+  when: flask_userlist is defined
+  become: yes
+
+# -------------------------------------------
+# *** Service ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Deploy {{ flask_app_name }} as service"
+  ansible.builtin.template:
+    src: "{{ item.value['template'] }}"
+    dest: "{{ item.value['destination'] }}"
+    owner: "root"
+    group: "root"
+  loop: "{{ flask_service_files | dict2items }}"
+  when: flask_service is defined
+  become: yes
+
+- name: "[{{ flask_app_name | upper }}] {{ flask_service.state }} Service: {{ flask_service.name }}"
+  systemd:
+    name: "{{ flask_service.name }}"
+    state: "{{ flask_service.state | default('started') }}"
+    enabled: "{{ flask_service.autostart }}"
+    daemon_reload: "{{ flask_service.reload | default('yes') }}"
+  when: flask_service is defined
+  become: yes

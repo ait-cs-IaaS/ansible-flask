@@ -1,0 +1,73 @@
+---
+# defaults file for ansible-flask
+
+flask_app_name: "flask-app"
+
+# Base IP address for CORS settings
+flask_base_ip: "{{ ansible_enp0s8.ipv4.address }}"
+
+FLASK_ACCESS_TOKEN: "{{ lookup('env', 'FLASK_ACCESS_TOKEN') }}"
+
+flask_user: "www-data"
+flask_usergroup: "{{ flask_user }}"
+flask_user_password: "password"
+
+flask_paths:
+  base: "/var/www/{{ flask_app_name }}"
+  log: "/var/log/{{ flask_app_name }}"
+
+flask_python_version: "3.8"
+
+flask_git:
+  user: "git-user"
+  repo: "flask-app-repo-name"
+  token: "{{ FLASK_ACCESS_TOKEN }}"
+  branch: "master"
+  force: yes
+  always_reinstall: yes
+
+flask_base_packages: 
+  - "python{{ flask_python_version }}"
+  - "python3-venv"
+  - "python3-pip"
+  - "git"
+
+flask_nginx_packages:
+  - "nginx"
+  - "python3-passlib"
+  - "apache2-utils"
+
+flask_service_files:
+  service:
+    template: "flask.service.j2"
+    destination: "/etc/systemd/system/{{ flask_app_name }}.service"
+  socket:
+    template: "flask.socket.j2"
+    destination: "/etc/systemd/system/{{ flask_app_name }}.socket"
+
+# flask_service:
+#   name: "{{ (flask_service_files.service['destination'] | basename | split('.service'))[0] }}"
+#   description: "flask daemon"
+#   requires: "flask.socket"
+#   user: "{{ flask_user }}"
+#   socket: "/run/{{ flask_app_name }}.sock"
+#   group: "{{ flask_usergroup }}"
+#   RuntimeDirectory: "flask_runtime"
+#   WorkingDirectory: "{{ flask_paths.base }}"
+#   ExecStart: >
+#     {{ flask_paths.base }}/venv/bin/gunicorn 
+#     --workers 5
+#     wsgi:app
+#     --pythonpath={{ flask_paths.base }}/venv/lib/python{{ flask_python_version }}
+#   state: restarted
+#   autostart: yes
+#   reload: yes
+
+# flask_nginx:
+#   server_name: "{{ flask_app_name }}.cyberrange.at"
+#   listen: "80 default_server"
+#   listen_ssl: "443 ssl default_server"
+#   ssl_cert: ""
+#   ssl_key: ""
+#   wwwroot: "{{ flask_paths.base }}"
+  
