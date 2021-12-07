@@ -6,7 +6,7 @@ flask_app_name: "flask-app"
 # Base IP address for CORS settings
 flask_base_ip: "{{ ansible_enp0s8.ipv4.address }}"
 
-FLASK_ACCESS_TOKEN: "{{ lookup('env', 'FLASK_ACCESS_TOKEN') }}"
+GIT_ACCESS_TOKEN: "{{ lookup('env', 'GIT_ACCESS_TOKEN') }}"
 
 flask_user: "www-data"
 flask_usergroup: "{{ flask_user }}"
@@ -21,7 +21,7 @@ flask_python_version: "3.8"
 flask_git:
   user: "git-user"
   repo: "flask-app-repo-name"
-  token: "{{ FLASK_ACCESS_TOKEN }}"
+  token: "{{ GIT_ACCESS_TOKEN }}"
   branch: "master"
   force: yes
   always_reinstall: yes
