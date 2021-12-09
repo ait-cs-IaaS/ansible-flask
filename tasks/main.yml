@@ -160,6 +160,21 @@
   notify: restart nginx
 
 # -------------------------------------------
+# *** ENV Config ***
+# -------------------------------------------
+
+- name: "[{{ flask_app_name | upper }}] Set ENV variables"
+  ansible.builtin.blockinfile:
+    path: /etc/environment
+    insertafter: EOF
+    block: |
+      {{ item.key }}="{{ item.value }}"
+    marker: "# {mark} {{ item.key }}"
+  with_dict: "{{ flask_ENV_variables }}"
+  when: flask_ENV_variables is defined
+  become: yes
+
+# -------------------------------------------
 # *** HTPASSWD Config ***
 # -------------------------------------------
 
