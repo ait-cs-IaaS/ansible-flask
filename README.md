@@ -1,38 +1,66 @@
-Role Name
-=========
+# Ansible Role: flask
 
-A brief description of the role goes here.
+Install a flask app and run as a service
 
-Requirements
-------------
+## Requirements
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+- Ansible 2.10+
+- Debian-based linux-distribution
 
-Role Variables
---------------
+## Dependencies
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+[grog.user](https://github.com/GROG/ansible-role-user)
 
-Dependencies
-------------
+## Role Variables
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+### General
 
-Example Playbook
-----------------
+```yaml
+flask_app_name: "flask-app" # Name of the app
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+flask_user: "www-data" # Owner of the app
+flask_usergroup: "{{ flask_user }}"
+flask_user_password: "password"
+```
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+### Setup
+```yaml
+flask_paths: # App directories
+  base: "/var/www/{{ flask_app_name }}"
+  log: "/var/log/{{ flask_app_name }}"
+```
 
-License
--------
+### Git & Access
+```yaml
+GIT_ACCESS_TOKEN: "{{ lookup('env', 'GIT_ACCESS_TOKEN') }}" # If not set as ENV, it is prompted for
 
-BSD
+flask_git: # Repo to clone the app from
+  user: "git-user"
+  repo: "flask-app-repo-name"
+  token: "{{ GIT_ACCESS_TOKEN }}"
+  branch: "master"
+  force: yes
+  always_reinstall: yes # If 'yes' the directory is cleared before cloning
+```
 
-Author Information
-------------------
+### Systemd service
+```yaml
+flask_service_files: # Template file definitions
+  service:
+    template: "flask.service.j2"
+    destination: "/etc/systemd/system/{{ flask_app_name }}.service"
+  socket:
+    template: "flask.socket.j2"
+    destination: "/etc/systemd/system/{{ flask_app_name }}.socket"
+```
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+
+## Configuration example
+
+## Licence
+
+GPL-3.0
+
+## Author information
+
+Lenhard Reuter
