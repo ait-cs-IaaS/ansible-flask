@@ -1,0 +1,9 @@
+[Unit]
+Description={{ flask_service.description }} socket
+
+[Socket]
+ListenStream={{ flask_service.socket }}
+SocketUser={{ flask_service.user }}
+
+[Install]
+WantedBy=sockets.target

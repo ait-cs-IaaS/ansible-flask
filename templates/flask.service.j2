@@ -1,0 +1,26 @@
+[Unit]
+Description={{ flask_service.description }} daemon
+{% if flask_service.requires is defined %}
+Requires={{ flask_service.requires }}
+{% endif %}
+After=network.target
+
+[Service]
+Type=notify
+User={{ flask_service.user }}
+Group={{ flask_service.group }}
+{% if flask_service.RuntimeDirectory is defined %}
+RuntimeDirectory={{ flask_service.RuntimeDirectory }}
+{% endif %}
+WorkingDirectory={{ flask_service.WorkingDirectory }}
+{% if flask_service.EnvironmentFile is defined %}
+EnvironmentFile={{ flask_service.EnvironmentFile }}
+{% endif %}
+ExecStart={{ flask_service.ExecStart }}
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
