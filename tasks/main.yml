@@ -4,12 +4,15 @@
 # *** Prerequisites ***
 # -------------------------------------------
 
-- name: "[{{ flask_app_name | upper }}] Set github access token"
+- name: "[{{ flask_app_name | upper }}] Set github Access Token"
   pause:
     prompt: "Please enter the github access token"
     echo: yes
   register: access_token
-  when: not GIT_ACCESS_TOKEN
+  when: | 
+    flask_git.private_repo | default(True)
+    and not flask_git.keyfile is defined
+    and not GIT_ACCESS_TOKEN
 
 - name: "[{{ flask_app_name | upper }}] Register Access Token"
   set_fact:
@@ -84,19 +87,24 @@
 
 - name: "[{{ flask_app_name | upper }}] Clone {{ flask_app_name }} repo"
   ansible.builtin.git:
-    repo: "https://\
-      {{ flask_git.token }}@github.com/\
+    repo: "\
+      {{ 'https://' if flask_git.keyfile is not defined else 'git' }}\
+      {{ GIT_ACCESS_TOKEN if (GIT_ACCESS_TOKEN is defined and GIT_ACCESS_TOKEN | length > 0) else '' }}\
+      {{ '@' if (flask_git.private_repo | default(True)) else ''}}\
+      {{ flask_git.domain | default('github.com') }}\
+      {{ '/' if flask_git.keyfile is not defined else ':'}}\
       {{ flask_git.user }}/\
       {{ flask_git.repo }}.git"
     dest: "{{ flask_paths.base }}"
-    version: "{{ flask_git.branch }}"
-    force: "{{ flask_git.force }}"
+    version: "{{ flask_git.branch | default('master') }}"
+    force: "{{ flask_git.force | default(True) }}"
+    key_file: "{{ flask_git.keyfile | default(omit)}}"
+    accept_newhostkey: yes
     single_branch: yes
   become: yes
   become_user: "{{ flask_user }}"
   when: flask_git.always_reinstall | default('yes') or 
         files.examined | int == 0
-
 
 # -------------------------------------------
 # *** Setup Flask App ***
